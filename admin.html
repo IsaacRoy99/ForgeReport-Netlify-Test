@@ -520,7 +520,7 @@ function renderReports(reports) {
                 <td>
                     ${
                         report.attachmentFilePath
-                            ? `<a href="${report.attachmentUrl || '#'}"
+                            ? `<a href="${report.attachmentUrl || '#'}" data-filename="${escapeHtml(report.attachmentFileName || 'attachment')}"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="btn btn-sm btn-outline-primary">
@@ -545,7 +545,7 @@ function renderReports(reports) {
                             <button
                                 class="btn btn-sm btn-success"
                                 onclick="reviewReport(
-                                    ${report.id},
+                                    '${report.id}',
                                     'Approved'
                                 )">
 
@@ -557,7 +557,7 @@ function renderReports(reports) {
                             <button
                                 class="btn btn-sm btn-danger"
                                 onclick="reviewReport(
-                                    ${report.id},
+                                    '${report.id}',
                                     'Rejected'
                                 )">
 

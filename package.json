@@ -2,7 +2,13 @@
   "name": "forge-report-system-netlify",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "netlify dev" },
-  "dependencies": { "@supabase/supabase-js": "^2.57.0" },
-  "devDependencies": { "netlify-cli": "^23.5.0" }
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^23.5.0"
+  }
 }

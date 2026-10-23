@@ -133,7 +133,7 @@ if (loginForm) {
 
             Swal.fire({
                 title: "Connection Error",
-                text: "Could not connect to the reporting server. Make sure the API is running.",
+                text: "Could not connect to the Netlify reporting server. Please try again after deployment finishes.",
                 icon: "error",
                 confirmButtonColor: "#d33"
             });
@@ -171,7 +171,7 @@ if (signupForm) {
             if (!response.ok) { Swal.fire({ title: 'Could Not Create Account', text: data.message || 'Please try again.', icon: 'error' }); return; }
             await Swal.fire({ title: 'Account Created', text: 'Your account is ready. You can now log in.', icon: 'success' });
             window.location.href = 'login.html';
-        } catch (error) { console.error(error); Swal.fire({ title: 'Connection Error', text: 'Could not reach the server. Check the Netlify/Supabase setup.', icon: 'error' }); }
+        } catch (error) { console.error(error); Swal.fire({ title: 'Connection Error', text: 'Could not reach the Netlify server. Please try again after deployment finishes.', icon: 'error' }); }
     });
 }
 
@@ -466,7 +466,7 @@ async function loadReports() {
                     actionButton = `
                         <button
                             class="btn btn-sm btn-warning fw-semibold"
-                            onclick="editRejectedReport(${report.id})">
+                            onclick="editRejectedReport('${report.id}')">
                             <i class="fa-solid fa-pen-to-square me-1"></i>
                             Edit & Resubmit
                         </button>

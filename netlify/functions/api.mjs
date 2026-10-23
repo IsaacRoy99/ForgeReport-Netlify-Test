@@ -1,169 +1,163 @@
-import { createClient } from '@supabase/supabase-js';
+import { getStore } from '@netlify/blobs';
+import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+const scrypt = promisify(scryptCallback);
 
-const headers = {
-  'Content-Type': 'application/json; charset=utf-8',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-};
+const store = getStore({ name: 'forge-report-system', consistency: 'strong' });
+const headers = { 'Content-Type':'application/json; charset=utf-8', 'Access-Control-Allow-Origin':'*', 'Access-Control-Allow-Headers':'Content-Type, Authorization', 'Access-Control-Allow-Methods':'GET, POST, PUT, OPTIONS' };
 const json = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) });
 const fail = (statusCode, message) => json(statusCode, { message });
-
-function getClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Netlify environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured.');
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+const departments = [
+  {id:1,name:'Academics',site:'Bloemfontein'}, {id:2,name:'Academics',site:'Clearwater'},
+  {id:3,name:'Construct',site:'Clearwater'}, {id:4,name:'Consult',site:'Clearwater'},
+  {id:5,name:'EXCO',site:'Clearwater'}, {id:6,name:'Finance',site:'Clearwater'},
+  {id:7,name:'FNC',site:'Northern Campus'}, {id:8,name:'HR & Payroll',site:'Clearwater'},
+  {id:9,name:'IT/Ozone',site:'Clearwater'}, {id:10,name:'Studios',site:'Clearwater'},
+  {id:11,name:'Talent',site:'Clearwater'}, {id:12,name:'Compliance',site:'Underberg'}
+];
+const emailKey = email => createHash('sha256').update(email.toLowerCase()).digest('hex');
+const userKey = id => `users/id-${id}`;
+const reportKey = id => `reports/${String(id).padStart(12,'0')}`;
+const attachmentKey = (id) => `attachments/${id}`;
+const getPath = event => (event.path || '/').replace(/^\/\.netlify\/functions\/api/, '').replace(/^\/api/, '').replace(/\/$/, '') || '/';
+function body(event) { if (!event.body) return {}; try { return JSON.parse(event.body); } catch { return {}; } }
+async function read(key) { return await store.get(key, { type:'json' }); }
+async function write(key, value) { await store.setJSON(key, value); }
+async function allWithPrefix(prefix) {
+  const found=[];
+  const result = await store.list({ prefix });
+  for (const item of (result.blobs || [])) { const value=await read(item.key); if(value) found.push(value); }
+  return found;
 }
-function getPath(event) {
-  let p = event.path || '/';
-  p = p.replace(/^\/\.netlify\/functions\/api/, '').replace(/^\/api/, '');
-  return p.replace(/\/$/, '') || '/';
+async function hashPassword(password, salt = randomBytes(16).toString('hex')) {
+  const derived = await scrypt(password, salt, 64);
+  return { salt, hash: Buffer.from(derived).toString('hex') };
 }
-function body(event) {
-  if (!event.body) return {};
-  try { return JSON.parse(event.body); } catch { return {}; }
+async function passwordMatches(password, record) {
+  const result=await scrypt(password, record.salt, 64);
+  const a=Buffer.from(result), b=Buffer.from(record.hash, 'hex');
+  return a.length===b.length && timingSafeEqual(a,b);
 }
-async function currentUser(supabase, event) {
-  const auth = event.headers?.authorization || event.headers?.Authorization || '';
-  const token = auth.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) return { error: fail(401, 'Please log in again.') };
-  const { data: authData, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !authData.user) return { error: fail(401, 'Your session has expired. Please log in again.') };
-  const { data: profile, error } = await supabase.from('profiles').select('id, full_name, email, role, department_id, departments(id,name,site)').eq('id', authData.user.id).single();
-  if (error || !profile) return { error: fail(403, 'Your account profile is not set up. Contact the administrator.') };
-  return { user: { id: profile.id, name: profile.full_name, email: profile.email, role: profile.role, departmentId: profile.department_id, department: profile.departments?.name || '', site: profile.departments?.site || '' }, profile };
+function publicUser(user) {
+  const dept=departments.find(d=>d.id===Number(user.departmentId));
+  return {id:user.id,name:user.name,email:user.email,role:user.role,departmentId:user.departmentId,department:dept?.name || '',site:dept?.site || ''};
 }
-const isAdmin = (u) => u?.role === 'Admin';
-const reportSelect = 'id,project_title,department_id,submitted_by_id,project_status,project_summary,challenges,next_steps,importance,due_date,reporting_date,review_status,admin_feedback,attachment_file_name,attachment_file_path,departments(name,site),profiles!reports_submitted_by_id_fkey(full_name)';
-function mapReport(r, attachmentUrl = null) {
-  return { id:r.id, projectTitle:r.project_title, department:r.departments?.name || '', site:r.departments?.site || '', submittedBy:r.profiles?.full_name || '', departmentId:r.department_id, submittedById:r.submitted_by_id, projectStatus:r.project_status, projectSummary:r.project_summary, challenges:r.challenges, nextSteps:r.next_steps, importance:r.importance, dueDate:r.due_date, reportingDate:r.reporting_date, reviewStatus:r.review_status, adminFeedback:r.admin_feedback, attachmentFileName:r.attachment_file_name, attachmentFilePath:r.attachment_file_path, attachmentUrl };
+async function currentUser(event) {
+  const auth=event.headers?.authorization || event.headers?.Authorization || '';
+  const token=auth.match(/^Bearer\s+(.+)$/i)?.[1];
+  if(!token) return {error:fail(401,'Please log in again.')};
+  const session=await read(`sessions/${token}`);
+  if(!session || session.expiresAt < Date.now()) return {error:fail(401,'Your session has expired. Please log in again.')};
+  const user=await read(userKey(session.userId));
+  if(!user) return {error:fail(401,'Your account could not be found. Please log in again.')};
+  return {user};
 }
-async function signedAttachment(supabase, path) {
-  if (!path) return null;
-  const { data } = await supabase.storage.from('report-attachments').createSignedUrl(path, 3600);
-  return data?.signedUrl || null;
+function mapReport(r, user, attachmentUrl=null) {
+  const dept=departments.find(d=>d.id===Number(r.departmentId));
+  return {id:r.id,projectTitle:r.projectTitle,department:dept?.name || '',site:dept?.site || '',submittedBy:user?.name || '',departmentId:r.departmentId,submittedById:r.submittedById,projectStatus:r.projectStatus,projectSummary:r.projectSummary,challenges:r.challenges,nextSteps:r.nextSteps,importance:r.importance,dueDate:r.dueDate,reportingDate:r.reportingDate,reviewStatus:r.reviewStatus,adminFeedback:r.adminFeedback || '',attachmentFileName:r.attachmentFileName || null,attachmentFilePath:r.attachmentFilePath || null,attachmentUrl};
 }
-
+async function expandedReport(r) {
+  const user=await read(userKey(r.submittedById));
+  const attachmentUrl=r.attachmentFilePath ? `/api/reports/${r.id}/attachment/download` : null;
+  return mapReport(r,user,attachmentUrl);
+}
 export async function handler(event) {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' };
-  let supabase;
-  try { supabase = getClient(); } catch (e) { return fail(503, e.message); }
-  const path = getPath(event);
-  const method = event.httpMethod;
-  const input = body(event);
-
+  if(event.httpMethod==='OPTIONS') return {statusCode:204,headers,body:''};
+  const path=getPath(event), method=event.httpMethod, input=body(event);
   try {
-    if (method === 'GET' && path.toLowerCase() === '/auth/departments') {
-      const { data, error } = await supabase.from('departments').select('id,name,site').order('name');
-      if (error) return fail(500, 'Could not load departments. Check the Supabase setup.');
-      return json(200, data);
+    if(method==='GET' && path.toLowerCase()==='/auth/departments') return json(200,departments);
+    if(method==='POST' && path.toLowerCase()==='/auth/signup') {
+      const fullName=String(input.fullName||'').trim(), email=String(input.email||'').trim().toLowerCase(), password=String(input.password||''), departmentId=Number(input.departmentId);
+      if(!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length<8 || !departments.some(d=>d.id===departmentId)) return fail(400,'Enter your name, a valid email, a password with at least 8 characters, and a valid department.');
+      const eKey=`users/email-${emailKey(email)}`;
+      if(await read(eKey)) return fail(409,'An account with this email already exists.');
+      // The first account created on a fresh test deployment becomes Admin; subsequent accounts are Department Heads.
+      const existing=await allWithPrefix('users/id-');
+      const pw=await hashPassword(password);
+      const user={id:randomUUID(),name:fullName,email,role:existing.length===0?'Admin':'DepartmentHead',departmentId,passwordSalt:pw.salt,passwordHash:pw.hash,createdAt:new Date().toISOString()};
+      await write(userKey(user.id),user);
+      await write(eKey,{id:user.id});
+      const roleNote=user.role==='Admin'?' This first account has administrator access.':' You can now log in.';
+      return json(201,{message:`Account created.${roleNote}`,role:user.role});
     }
-
-    if (method === 'POST' && path.toLowerCase() === '/auth/signup') {
-      const fullName = String(input.fullName || '').trim();
-      const email = String(input.email || '').trim().toLowerCase();
-      const password = String(input.password || '');
-      const departmentId = Number(input.departmentId);
-      if (!fullName || !email || password.length < 8 || !departmentId) return fail(400, 'Enter your name, email, a department, and a password with at least 8 characters.');
-      const { data: department } = await supabase.from('departments').select('id').eq('id', departmentId).maybeSingle();
-      if (!department) return fail(400, 'Choose a valid department.');
-      const { data: created, error: createError } = await supabase.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } });
-      if (createError) return fail(400, createError.message.includes('already') ? 'An account with this email already exists.' : createError.message);
-      const { error: profileError } = await supabase.from('profiles').insert({ id: created.user.id, full_name: fullName, email, role: 'DepartmentHead', department_id: departmentId });
-      if (profileError) {
-        await supabase.auth.admin.deleteUser(created.user.id);
-        return fail(500, 'Account setup failed. Please try again or contact the administrator.');
-      }
-      return json(201, { message: 'Account created. You can now log in.' });
+    if(method==='POST' && path.toLowerCase()==='/auth/login') {
+      const email=String(input.email||'').trim().toLowerCase(), password=String(input.password||'');
+      if(!email || !password) return fail(400,'Email and password are required.');
+      const emailRecord=await read(`users/email-${emailKey(email)}`);
+      const user=emailRecord ? await read(userKey(emailRecord.id)) : null;
+      if(!user || !await passwordMatches(password,{salt:user.passwordSalt,hash:user.passwordHash})) return fail(401,'Invalid email or password.');
+      const token=randomBytes(32).toString('hex');
+      await write(`sessions/${token}`,{userId:user.id,expiresAt:Date.now()+7*24*60*60*1000});
+      return json(200,{message:'Login successful.',token,user:publicUser(user)});
     }
-
-    if (method === 'POST' && path.toLowerCase() === '/auth/login') {
-      const email = String(input.email || '').trim().toLowerCase();
-      const password = String(input.password || '');
-      if (!email || !password) return fail(400, 'Email and password are required.');
-      const { data: session, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-      if (loginError || !session.session) return fail(401, 'Invalid email or password.');
-      const { data: profile, error: profileError } = await supabase.from('profiles').select('id,full_name,email,role,department_id,departments(id,name,site)').eq('id', session.user.id).single();
-      if (profileError || !profile) return fail(403, 'Your profile is missing. Contact the administrator.');
-      return json(200, { message: 'Login successful.', token: session.session.access_token, user: { id:profile.id, name:profile.full_name, email:profile.email, role:profile.role, departmentId:profile.department_id, department:profile.departments?.name || '', site:profile.departments?.site || '' } });
+    const auth=await currentUser(event); if(auth.error) return auth.error;
+    const user=auth.user, isAdmin=user.role==='Admin';
+    if(method==='GET' && path.toLowerCase()==='/reports') {
+      if(!isAdmin) return fail(403,'Administrator access is required.');
+      const reports=(await allWithPrefix('reports/')).sort((a,b)=>new Date(b.reportingDate)-new Date(a.reportingDate));
+      return json(200,await Promise.all(reports.map(expandedReport)));
     }
-
-    const auth = await currentUser(supabase, event);
-    if (auth.error) return auth.error;
-    const user = auth.user;
-
-    if (method === 'GET' && path.toLowerCase() === '/reports') {
-      if (!isAdmin(user)) return fail(403, 'Administrator access is required.');
-      const { data, error } = await supabase.from('reports').select(reportSelect).order('reporting_date', { ascending: false });
-      if (error) return fail(500, 'Could not load reports.');
-      const mapped = await Promise.all(data.map(async r => mapReport(r, await signedAttachment(supabase, r.attachment_file_path))));
-      return json(200, mapped);
+    const userReports=path.match(/^\/reports\/user\/([^/]+)$/i);
+    if(method==='GET' && userReports) {
+      if(userReports[1]!==user.id && !isAdmin) return fail(403,'You can only view your own reports.');
+      const reports=(await allWithPrefix('reports/')).filter(r=>r.submittedById===userReports[1]).sort((a,b)=>new Date(b.reportingDate)-new Date(a.reportingDate));
+      return json(200,await Promise.all(reports.map(expandedReport)));
     }
-
-    const userReportsMatch = path.match(/^\/reports\/user\/([^/]+)$/i);
-    if (method === 'GET' && userReportsMatch) {
-      if (userReportsMatch[1] !== user.id && !isAdmin(user)) return fail(403, 'You can only view your own reports.');
-      const { data, error } = await supabase.from('reports').select(reportSelect).eq('submitted_by_id', userReportsMatch[1]).order('reporting_date', { ascending: false });
-      if (error) return fail(500, 'Could not load your reports.');
-      return json(200, await Promise.all(data.map(async r => mapReport(r, await signedAttachment(supabase, r.attachment_file_path)))));
+    if(method==='POST' && path.toLowerCase()==='/reports') {
+      const required=['projectTitle','projectStatus','projectSummary','challenges','nextSteps','importance'];
+      if(required.some(k=>!String(input[k]||'').trim())) return fail(400,'Please complete all required report fields.');
+      const id=Date.now();
+      const report={id,projectTitle:String(input.projectTitle).trim(),departmentId:user.departmentId,submittedById:user.id,projectStatus:String(input.projectStatus),projectSummary:String(input.projectSummary).trim(),challenges:String(input.challenges).trim(),nextSteps:String(input.nextSteps).trim(),importance:String(input.importance),dueDate:input.dueDate || new Date().toISOString().slice(0,10),reportingDate:new Date().toISOString(),reviewStatus:'Pending',adminFeedback:'',attachmentFileName:null,attachmentFilePath:null};
+      await write(reportKey(id),report);
+      return json(201,{message:'Report submitted successfully.',reportId:id});
     }
-
-    if (method === 'POST' && path.toLowerCase() === '/reports') {
-      const fields = ['projectTitle','projectStatus','projectSummary','challenges','nextSteps','importance'];
-      if (fields.some(k => !String(input[k] || '').trim())) return fail(400, 'Please complete all required report fields.');
-      const row = { project_title:String(input.projectTitle).trim(), department_id:user.departmentId, submitted_by_id:user.id, project_status:input.projectStatus, project_summary:input.projectSummary, challenges:input.challenges, next_steps:input.nextSteps, importance:input.importance, due_date:input.dueDate || new Date().toISOString().slice(0,10), reporting_date:new Date().toISOString(), review_status:'Pending' };
-      const { data, error } = await supabase.from('reports').insert(row).select('id').single();
-      if (error) return fail(500, 'Could not save the report.');
-      return json(201, { message:'Report submitted successfully.', reportId:data.id });
+    const download=path.match(/^\/reports\/([^/]+)\/attachment\/download$/i);
+    if(method==='GET' && download) {
+      const report=await read(reportKey(download[1]));
+      if(!report) return fail(404,'Report not found.');
+      if(report.submittedById!==user.id && !isAdmin) return fail(403,'You cannot view this attachment.');
+      if(!report.attachmentFilePath) return fail(404,'No attachment is available.');
+      const file=await read(attachmentKey(report.id));
+      if(!file) return fail(404,'Attachment file not found.');
+      return {statusCode:200,headers:{'Content-Type':file.contentType,'Content-Disposition':`inline; filename="${String(file.fileName).replace(/[\"\r\n]/g,'_')}"`,'Cache-Control':'private, no-store'},body:file.base64,isBase64Encoded:true};
     }
-
-    const resubmitMatch = path.match(/^\/reports\/(\d+)\/resubmit$/i);
-    if (method === 'PUT' && resubmitMatch) {
-      const { data: existing, error: lookupError } = await supabase.from('reports').select('id,submitted_by_id,review_status').eq('id', Number(resubmitMatch[1])).maybeSingle();
-      if (lookupError || !existing) return fail(404, 'Report not found.');
-      if (existing.submitted_by_id !== user.id) return fail(403, 'You can only edit your own reports.');
-      if (existing.review_status !== 'Rejected') return fail(400, 'Only rejected reports can be resubmitted.');
-      const { error } = await supabase.from('reports').update({ project_title:input.projectTitle, project_status:input.projectStatus, project_summary:input.projectSummary, challenges:input.challenges, next_steps:input.nextSteps, importance:input.importance, due_date:input.dueDate, reporting_date:new Date().toISOString(), review_status:'Pending', admin_feedback:null }).eq('id', existing.id);
-      if (error) return fail(500, 'Could not resubmit the report.');
-      return json(200, { message:'Report resubmitted successfully.', reportId:existing.id });
+    const upload=path.match(/^\/reports\/([^/]+)\/attachment$/i);
+    if(method==='POST' && upload) {
+      const report=await read(reportKey(upload[1]));
+      if(!report) return fail(404,'Report not found.');
+      if(report.submittedById!==user.id && !isAdmin) return fail(403,'You cannot attach a file to this report.');
+      const fileName=String(input.fileName||'attachment').split(/[\\/]/).pop();
+      const ext=fileName.includes('.')?fileName.split('.').pop().toLowerCase():'';
+      const allowed=['pdf','doc','docx','xls','xlsx','png','jpg','jpeg'];
+      const base64=String(input.base64||'').replace(/^data:[^;]+;base64,/,'');
+      if(!allowed.includes(ext)) return fail(400,'Allowed files: PDF, Word, Excel, PNG and JPG.');
+      if(!base64 || base64.length>4_800_000) return fail(400,'Please select a file smaller than 3.5 MB for reliable browser upload.');
+      const contentType=String(input.contentType||'application/octet-stream');
+      await write(attachmentKey(report.id),{fileName,contentType,base64});
+      report.attachmentFileName=fileName; report.attachmentFilePath=attachmentKey(report.id); await write(reportKey(report.id),report);
+      return json(200,{message:'Attachment uploaded successfully.',fileName});
     }
-
-    const reviewMatch = path.match(/^\/reports\/(\d+)\/review$/i);
-    if (method === 'PUT' && reviewMatch) {
-      if (!isAdmin(user)) return fail(403, 'Administrator access is required.');
-      if (!['Approved','Rejected'].includes(input.reviewStatus)) return fail(400, 'Review status must be Approved or Rejected.');
-      const { data: existing } = await supabase.from('reports').select('id').eq('id', Number(reviewMatch[1])).maybeSingle();
-      if (!existing) return fail(404, 'Report not found.');
-      const { error } = await supabase.from('reports').update({ review_status:input.reviewStatus, admin_feedback:String(input.adminFeedback || '').trim() || null }).eq('id', existing.id);
-      if (error) return fail(500, 'Could not update report review.');
-      return json(200, { message:`Report ${input.reviewStatus.toLowerCase()} successfully.` });
+    const resubmit=path.match(/^\/reports\/([^/]+)\/resubmit$/i);
+    if(method==='PUT' && resubmit) {
+      const report=await read(reportKey(resubmit[1]));
+      if(!report) return fail(404,'Report not found.');
+      if(report.submittedById!==user.id) return fail(403,'You can only edit your own reports.');
+      if(report.reviewStatus!=='Rejected') return fail(400,'Only rejected reports can be resubmitted.');
+      for(const k of ['projectTitle','projectStatus','projectSummary','challenges','nextSteps','importance']) if(!String(input[k]||'').trim()) return fail(400,'Please complete all required report fields.');
+      Object.assign(report,{projectTitle:String(input.projectTitle).trim(),projectStatus:input.projectStatus,projectSummary:input.projectSummary,challenges:input.challenges,nextSteps:input.nextSteps,importance:input.importance,dueDate:input.dueDate||report.dueDate,reportingDate:new Date().toISOString(),reviewStatus:'Pending',adminFeedback:''});
+      await write(reportKey(report.id),report); return json(200,{message:'Report resubmitted successfully.',reportId:report.id});
     }
-
-    const uploadMatch = path.match(/^\/reports\/(\d+)\/attachment$/i);
-    if (method === 'POST' && uploadMatch) {
-      const reportId = Number(uploadMatch[1]);
-      const { data: report } = await supabase.from('reports').select('id,submitted_by_id').eq('id', reportId).maybeSingle();
-      if (!report) return fail(404, 'Report not found.');
-      if (report.submitted_by_id !== user.id && !isAdmin(user)) return fail(403, 'You cannot attach a file to this report.');
-      const name = String(input.fileName || 'attachment').split(/[\\/]/).pop();
-      const contentType = String(input.contentType || 'application/octet-stream');
-      const base64 = String(input.base64 || '');
-      const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-      if (!['pdf','doc','docx','xls','xlsx','png','jpg','jpeg'].includes(ext)) return fail(400, 'Allowed files: PDF, Word, Excel, PNG and JPG.');
-      if (!base64 || base64.length > 4_800_000) return fail(400, 'Please select a file smaller than 3.5 MB for reliable browser upload.');
-      const bytes = Buffer.from(base64, 'base64');
-      const pathInBucket = `${user.id}/${reportId}/${crypto.randomUUID()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('report-attachments').upload(pathInBucket, bytes, { contentType, upsert:false });
-      if (uploadError) return fail(500, 'The report was saved, but its attachment could not be uploaded. Check the Supabase storage bucket setup.');
-      const { error: updateError } = await supabase.from('reports').update({ attachment_file_name:name, attachment_file_path:pathInBucket }).eq('id', reportId);
-      if (updateError) return fail(500, 'The file uploaded but its report record could not be updated.');
-      return json(200, { message:'Attachment uploaded successfully.', fileName:name });
+    const review=path.match(/^\/reports\/([^/]+)\/review$/i);
+    if(method==='PUT' && review) {
+      if(!isAdmin) return fail(403,'Administrator access is required.');
+      if(!['Approved','Rejected'].includes(input.reviewStatus)) return fail(400,'Review status must be Approved or Rejected.');
+      const report=await read(reportKey(review[1])); if(!report) return fail(404,'Report not found.');
+      report.reviewStatus=input.reviewStatus; report.adminFeedback=String(input.adminFeedback||'').trim(); await write(reportKey(report.id),report);
+      return json(200,{message:`Report ${input.reviewStatus.toLowerCase()} successfully.`});
     }
-
-    return fail(404, 'API endpoint not found.');
-  } catch (error) {
-    console.error('Netlify API error:', error);
-    return fail(500, 'The server encountered an error. Check the Netlify function logs for details.');
+    return fail(404,'API endpoint not found.');
+  } catch(error) {
+    console.error('Forge Report API error:',error);
+    return fail(500,'The server encountered an error. Please try again.');
   }
 }

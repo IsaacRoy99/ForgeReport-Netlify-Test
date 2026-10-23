@@ -1,40 +1,35 @@
-FORGE REPORT SYSTEM — NETLIFY PACKAGE
-====================================
+FORGE REPORT SYSTEM — NETLIFY-ONLY TEST PACKAGE
+=============================================
 
-WHAT CHANGED
-- Kept the existing HTML/CSS pages and visual design.
-- Removed the old localhost/MonsterASP API addresses.
-- Added Netlify Functions at /api/* to replace the ASP.NET API routes.
-- Added authenticated login and account creation using Supabase Auth.
-- Added department selection to signup, report create/list/resubmit, admin review, and private attachment storage.
-- Added a database schema file: supabase-setup.sql.
+This version uses Netlify Functions plus Netlify Blobs for persistent storage. It does NOT require Supabase, a separate database account, database credentials, or environment variables.
 
-IMPORTANT: This folder is prepared for Netlify, but the API cannot operate until the Supabase project is configured. Do not upload any passwords or service-role keys to GitHub.
+UPLOAD
+1. Extract this ZIP. Upload the CONTENTS of the AReport folder to the root of your GitHub repository.
+2. If your test repository is already connected to Netlify, keep that connection. Commit these files to that same repository and Netlify should redeploy automatically. Only create/connect a site if you have not already done so.
+3. Netlify should detect netlify.toml. Build command: leave blank. Publish directory: .
+4. Deploy.
+5. Open the deployed site's signup page and create the first account. On a fresh storage database, the first account becomes Admin. Subsequent accounts become Department Heads.
+6. Sign in as Admin and test reports, approvals/rejections, history and attachments.
 
-ONE-TIME EXTERNAL SETUP
-1. Create a Supabase project at https://supabase.com/ (free tier is sufficient for a test).
-2. In Supabase, open SQL Editor, create a new query, paste the complete contents of supabase-setup.sql, and run it.
-3. In Supabase Project Settings -> API, copy the Project URL and the service_role key. The service_role key is SECRET; never put it in a source file or GitHub.
-4. Upload this folder to your GitHub repository, keeping netlify.toml, package.json, api-client.js, and netlify/ at the repository root.
-5. In Netlify, connect the repository. Build settings should use no build command and publish directory ".". Netlify should detect netlify.toml.
-6. In Netlify Site configuration -> Environment variables, add:
-   SUPABASE_URL = your Supabase Project URL
-   SUPABASE_SERVICE_ROLE_KEY = your Supabase service_role key
-   Save, then trigger a new deploy.
-7. Open the deployed site's signup page and create your own account. Choose the correct department.
-8. To make your account the administrator, open Supabase SQL Editor and run this command, replacing the email with your signup email:
-   update public.profiles set role = 'Admin' where lower(email) = lower('YOUR_EMAIL_HERE');
-9. Log in again. The administrator account should open admin.html. Create a separate Department Head account to test normal submissions.
+STORAGE AND IMPORTANT NOTES
+- Data is stored persistently using Netlify Blobs in the deployed site; it is not stored in the visitor's browser.
+- No Supabase environment variables are used.
+- The first-account-admin rule is intended for initial setup/testing. Create the first account yourself immediately on a new deployment before sharing the URL. Do not use this as a hardened public registration system without adding a controlled admin-bootstrap process.
+- Attachments are limited to about 3.5 MB per upload and stored privately; only the submitting user and administrator can retrieve them.
+- This package does not import historical records from the former SQL Server database. It starts with a fresh dataset.
+- Netlify Blobs is suitable for a test deployment and modest usage. For concurrent/high-volume production use, use a transactional database and review authentication/security requirements.
 
-TEST CHECKLIST
-- Sign up and log in from a phone or desktop.
-- Submit a report and verify it appears in report history.
-- Log in as Admin, approve/reject it, and add rejection feedback.
-- Log back in as the submitting user and edit/resubmit the rejected report.
-- Test a small attachment. The current browser-to-function upload is limited to about 3.5 MB to stay within serverless request-size limits; the bucket itself is configured for 5 MB.
+ROUTES
+- /api/auth/departments
+- /api/auth/signup and /api/auth/login
+- /api/reports (admin only)
+- /api/reports/user/:userId
+- /api/reports and /api/reports/:id/resubmit
+- /api/reports/:id/review (admin only)
+- /api/reports/:id/attachment
 
-DATA MIGRATION NOTE
-This creates a new Supabase database. It does not automatically copy historical users/reports from the old SQL Server database. Existing accounts will need to be recreated through signup unless their records are separately migrated. Do not delete the old database until the new site has been tested.
 
-SECURITY NOTE
-The Supabase service-role key belongs only in Netlify environment variables. Never add it to JavaScript, HTML, SQL, screenshots, or GitHub. If a database password or API secret was previously exposed, rotate it at its provider.
+CHECKS AND LIMITATIONS
+- The API and frontend JavaScript were syntax-checked locally, and a mocked-storage smoke test passed signup, login, report creation, admin listing/review, duplicate-account rejection, and rejection of unauthenticated API access. This does not replace a live Netlify deployment test.
+- Create the first administrator account yourself immediately after deploying, before sharing the public URL. Anyone who registers first on a brand-new store can otherwise become the initial Admin.
+- This is a test deployment package, not a production security review.
