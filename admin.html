@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Admin Dashboard - Forge Academy</title>
+
+    <link rel="icon"
+          type="image/png"
+          href="forge-logo-wht.png">
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet">
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+
+<body>
+
+
+<!-- HEADER -->
+
+<nav class="navbar navbar-dark custom-navbar px-4">
+
+    <div class="container-fluid">
+
+        <div class="d-flex align-items-center">
+
+            <img src="forge-logo-wht.png"
+                 width="100"
+                 class="me-3">
+
+            <div>
+
+                <h4 class="mb-0">
+                    Reporting System
+                </h4>
+
+                <small class="text-white-50">
+                    Administrator Dashboard
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="d-flex align-items-center gap-3">
+
+            <span class="text-white">
+                <i class="fa-solid fa-user-shield me-2"></i>
+                <span id="adminName">
+                    Administrator
+                </span>
+            </span>
+
+            <button
+                id="adminLogout"
+                class="btn btn-warning fw-semibold">
+
+                <i class="fa-solid fa-right-from-bracket me-2"></i>
+                Logout
+
+            </button>
+
+        </div>
+
+    </div>
+
+</nav>
+
+
+
+<!-- CONTENT -->
+
+<div class="container-fluid py-4">
+
+    <div class="mb-4">
+
+        <h2 class="fw-bold">
+            Admin Dashboard
+        </h2>
+
+        <p class="text-muted">
+            Review and manage department reports.
+        </p>
+
+    </div>
+
+
+
+    <!-- STATS -->
+
+    <div class="row g-4 mb-4">
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm p-4">
+
+                <div class="d-flex justify-content-between">
+
+                    <div>
+
+                        <small class="text-muted">
+                            Total Reports
+                        </small>
+
+                        <h2 id="totalReports"
+                            class="fw-bold mb-0">
+                            0
+                        </h2>
+
+                    </div>
+
+                    <i class="fa-solid fa-file-lines fs-2 text-warning"></i>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm p-4">
+
+                <div class="d-flex justify-content-between">
+
+                    <div>
+
+                        <small class="text-muted">
+                            Pending Review
+                        </small>
+
+                        <h2 id="totalPending"
+                            class="fw-bold mb-0">
+                            0
+                        </h2>
+
+                    </div>
+
+                    <i class="fa-solid fa-clock fs-2 text-warning"></i>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm p-4">
+
+                <div class="d-flex justify-content-between">
+
+                    <div>
+
+                        <small class="text-muted">
+                            Approved
+                        </small>
+
+                        <h2 id="totalApproved"
+                            class="fw-bold mb-0">
+                            0
+                        </h2>
+
+                    </div>
+
+                    <i class="fa-solid fa-circle-check fs-2 text-success"></i>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm p-4">
+
+                <div class="d-flex justify-content-between">
+
+                    <div>
+
+                        <small class="text-muted">
+                            Rejected
+                        </small>
+
+                        <h2 id="totalRejected"
+                            class="fw-bold mb-0">
+                            0
+                        </h2>
+
+                    </div>
+
+                    <i class="fa-solid fa-circle-xmark fs-2 text-danger"></i>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- REPORTS -->
+
+    <div class="card shadow-sm">
+
+        <div class="card-body">
+
+            <div class="d-flex justify-content-between
+                        align-items-center mb-4">
+
+                <div>
+
+                    <h4 class="fw-bold mb-1">
+                        All Department Reports
+                    </h4>
+
+                    <small class="text-muted">
+                        Review reports submitted by Department Heads.
+                    </small>
+
+                </div>
+
+
+                
+                <div class="row g-3 mb-4">
+
+                    <div class="col-md-6">
+                        <label for="searchInput" class="form-label">Search Reports</label>
+                        <input
+                            type="text"
+                            id="searchInput"
+                            class="form-control"
+                            placeholder="Search title, department or submitter..."
+                        >
+                    </div>
+
+                    <div class="col-md-3">
+                        <label for="departmentFilter" class="form-label">Department</label>
+                        <select id="departmentFilter" class="form-select">
+                            <option value="">All Departments</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label for="siteFilter" class="form-label">Site</label>
+                        <select id="siteFilter" class="form-select">
+                            <option value="">All Sites</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="projectStatusFilter" class="form-label">Project Status</label>
+                        <select id="projectStatusFilter" class="form-select">
+                            <option value="">All Project Statuses</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="reviewStatusFilter" class="form-label">Review Status</label>
+                        <select id="reviewStatusFilter" class="form-select">
+                            <option value="">All Review Statuses</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+
+                    <div class="col-12 text-end">
+                        <button type="button" id="clearFilters" class="btn btn-outline-secondary">
+                            <i class="fa-solid fa-rotate-left me-1"></i>
+                            Clear Filters
+                        </button>
+                    </div>
+
+                </div>
+
+
+            </div>
+
+
+            <div class="table-responsive">
+
+                <table class="table table-hover align-middle">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Project</th>
+
+                            <th>Department</th>
+
+                            <th>Site</th>
+
+                            <th>Submitted By</th>
+
+                            <th>Project Status</th>
+
+                            <th>Importance</th>
+
+                            <th>Review</th>
+
+                            <th>Attachment</th>
+
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="adminReportTable">
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<script src="api-client.js"></script>
+<script>
+
+// ======================================================
+// ADMIN SECURITY
+// ======================================================
+
+if (
+    sessionStorage.getItem("loggedIn") !== "true" ||
+    sessionStorage.getItem("userRole") !== "Admin"
+) {
+
+    window.location.href =
+        "login.html";
+}
+
+
+document.getElementById("adminName").textContent =
+    sessionStorage.getItem("userName") ||
+    "Administrator";
+
+
+// ======================================================
+// LOAD REPORTS
+// ======================================================
+
+let allReports = [];
+
+
+async function loadAdminReports() {
+
+    try {
+
+        const response =
+            await fetch(`${API_URL}/Reports`);
+
+        allReports = await response.json();
+
+        populateFilterOptions();
+
+        renderReports(allReports);
+        updateAdminStats(allReports);   
+
+    } catch (error) {
+
+        console.error(error);
+
+        Swal.fire({
+            title: "Connection Error",
+            text: "Could not connect to the reporting API.",
+            icon: "error"
+        });
+    }
+}
+
+
+// ======================================================
+// DISPLAY REPORTS
+// ======================================================
+
+function renderReports(reports) {
+
+    const table =
+        document.getElementById("adminReportTable");
+
+    table.innerHTML = "";
+
+
+    if (reports.length === 0) {
+
+        table.innerHTML = `
+
+            <tr>
+
+                <td colspan="8"
+                    class="text-center text-muted py-5">
+
+                    No reports have been submitted yet.
+
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+    }
+
+
+    reports.forEach(report => {
+
+        let reviewBadge =
+            "warning";
+
+        if (report.reviewStatus === "Approved")
+            reviewBadge = "success";
+
+        if (report.reviewStatus === "Rejected")
+            reviewBadge = "danger";
+
+
+        table.innerHTML += `
+
+            <tr>
+
+                <td>
+
+                    <strong>
+                        ${escapeHtml(report.projectTitle)}
+                    </strong>
+
+                    <br>
+
+                    <small class="text-muted">
+                        ${escapeHtml(report.projectSummary)}
+                    </small>
+
+                </td>
+
+
+                <td>
+                    ${escapeHtml(report.department)}
+                </td>
+
+
+                <td>
+                    ${escapeHtml(report.site)}
+                </td>
+
+
+                <td>
+                    ${escapeHtml(report.submittedBy)}
+                </td>
+
+
+                <td>
+
+                    <span class="badge bg-primary">
+                        ${escapeHtml(report.projectStatus)}
+                    </span>
+
+                </td>
+
+
+                <td>
+
+                    <span class="badge bg-secondary">
+                        ${escapeHtml(report.importance)}
+                    </span>
+
+                </td>
+
+
+                <td>
+
+                    <span class="badge bg-${reviewBadge}">
+                        ${escapeHtml(report.reviewStatus)}
+                    </span>
+
+                    ${
+                        report.adminFeedback
+                        ? `<br>
+                           <small class="text-muted">
+                               ${escapeHtml(report.adminFeedback)}
+                           </small>`
+                        : ""
+                    }
+
+                </td>
+
+                <td>
+                    ${
+                        report.attachmentFilePath
+                            ? `<a href="${report.attachmentUrl || '#'}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="btn btn-sm btn-outline-primary">
+                                    <i class="fa-solid fa-file-pdf me-1"></i> View PDF
+                            </a>`
+                            : '<span class="text-muted">No attachment</span>'
+                    }
+                </td>
+
+
+                <td>
+
+                    ${
+                        report.reviewStatus === "Pending"
+
+                        ?
+
+                        `
+
+                        <div class="d-flex gap-2">
+
+                            <button
+                                class="btn btn-sm btn-success"
+                                onclick="reviewReport(
+                                    ${report.id},
+                                    'Approved'
+                                )">
+
+                                <i class="fa-solid fa-check"></i>
+
+                            </button>
+
+
+                            <button
+                                class="btn btn-sm btn-danger"
+                                onclick="reviewReport(
+                                    ${report.id},
+                                    'Rejected'
+                                )">
+
+                                <i class="fa-solid fa-xmark"></i>
+
+                            </button>
+
+                        </div>
+
+                        `
+
+                        :
+
+                        `<small class="text-muted">
+                            Reviewed
+                        </small>`
+                    }
+
+                </td>
+
+            </tr>
+
+        `;
+    });
+}
+
+
+// ======================================================
+// REVIEW REPORT
+// ======================================================
+
+async function reviewReport(id, status) {
+
+    let feedback = "";
+
+
+    if (status === "Rejected") {
+
+        const result =
+            await Swal.fire({
+
+                title: "Reject Report",
+
+                input: "textarea",
+
+                inputLabel:
+                    "Reason / feedback",
+
+                inputPlaceholder:
+                    "Enter feedback for the Department Head...",
+
+                inputAttributes: {
+                    "aria-label":
+                        "Enter feedback"
+                },
+
+                showCancelButton: true,
+
+                confirmButtonText:
+                    "Reject Report",
+
+                confirmButtonColor:
+                    "#dc3545"
+
+            });
+
+
+        if (!result.isConfirmed)
+            return;
+
+
+        feedback =
+            result.value || "";
+
+    } else {
+
+        const result =
+            await Swal.fire({
+
+                title: "Approve Report?",
+
+                text:
+                    "You can optionally provide feedback.",
+
+                input: "textarea",
+
+                inputPlaceholder:
+                    "Optional feedback...",
+
+                showCancelButton: true,
+
+                confirmButtonText:
+                    "Approve",
+
+                confirmButtonColor:
+                    "#198754"
+
+            });
+
+
+        if (!result.isConfirmed)
+            return;
+
+
+        feedback =
+            result.value || "";
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/Reports/${id}/review`,
+                {
+
+                    method: "PUT",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        reviewStatus:
+                            status,
+
+                        adminFeedback:
+                            feedback
+
+                    })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            Swal.fire({
+                title: "Error",
+                text:
+                    data.message ||
+                    "Could not update report.",
+                icon: "error"
+            });
+
+            return;
+        }
+
+
+        await Swal.fire({
+
+            title:
+                status === "Approved"
+                    ? "Report Approved"
+                    : "Report Rejected",
+
+            text:
+                "The report has been updated successfully.",
+
+            icon:
+                status === "Approved"
+                    ? "success"
+                    : "warning",
+
+            confirmButtonColor:
+                "#fca311"
+
+        });
+
+
+        loadAdminReports();
+
+    } catch (error) {
+
+        console.error(error);
+
+        Swal.fire({
+            title: "Connection Error",
+            text: "Could not connect to the API.",
+            icon: "error"
+        });
+    }
+}
+
+
+// ======================================================
+// STATS
+// ======================================================
+
+function updateAdminStats(reports) {
+
+    document.getElementById("totalReports")
+        .textContent = reports.length;
+
+
+    document.getElementById("totalPending")
+        .textContent =
+            reports.filter(r =>
+                r.reviewStatus === "Pending"
+            ).length;
+
+
+    document.getElementById("totalApproved")
+        .textContent =
+            reports.filter(r =>
+                r.reviewStatus === "Approved"
+            ).length;
+
+
+    document.getElementById("totalRejected")
+        .textContent =
+            reports.filter(r =>
+                r.reviewStatus === "Rejected"
+            ).length;
+}
+
+
+// ======================================================
+// SEARCH
+// ======================================================
+
+
+function populateFilterOptions() {
+    const departments = [
+        ...new Set(allReports.map(report => report.department).filter(Boolean))
+    ];
+
+    const sites = [
+        ...new Set(allReports.map(report => report.site).filter(Boolean))
+    ];
+
+    const projectStatuses = [
+        ...new Set(allReports.map(report => report.projectStatus).filter(Boolean))
+    ];
+
+    function fillSelect(id, values) {
+        const select = document.getElementById(id);
+
+        // Keep the default "All" option and remove old options.
+        select.innerHTML = select.options[0].outerHTML;
+
+        values.sort().forEach(value => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = value;
+            select.appendChild(option);
+        });
+    }
+
+    fillSelect("departmentFilter", departments);
+    fillSelect("siteFilter", sites);
+    fillSelect("projectStatusFilter", projectStatuses);
+}
+
+function filterAdminReports() {
+    const searchValue =
+        document.getElementById("searchInput").value.trim().toLowerCase();
+
+    const department =
+        document.getElementById("departmentFilter").value;
+
+    const site =
+        document.getElementById("siteFilter").value;
+
+    const projectStatus =
+        document.getElementById("projectStatusFilter").value;
+
+    const reviewStatus =
+        document.getElementById("reviewStatusFilter").value;
+
+    const filtered = allReports.filter(report => {
+        const matchesSearch = [
+            report.projectTitle,
+            report.projectSummary,
+            report.department,
+            report.site,
+            report.submittedBy,
+            report.projectStatus,
+            report.importance,
+            report.reviewStatus
+        ].some(value =>
+            String(value ?? "").toLowerCase().includes(searchValue)
+        );
+
+        return matchesSearch
+            && (!department || report.department === department)
+            && (!site || report.site === site)
+            && (!projectStatus || report.projectStatus === projectStatus)
+            && (!reviewStatus || report.reviewStatus === reviewStatus);
+    });
+
+    renderReports(filtered);
+}
+
+document.getElementById("searchInput")
+    .addEventListener("input", filterAdminReports);
+
+document.getElementById("departmentFilter")
+    .addEventListener("change", filterAdminReports);
+
+document.getElementById("siteFilter")
+    .addEventListener("change", filterAdminReports);
+
+document.getElementById("projectStatusFilter")
+    .addEventListener("change", filterAdminReports);
+
+document.getElementById("reviewStatusFilter")
+    .addEventListener("change", filterAdminReports);
+
+document.getElementById("clearFilters")
+    .addEventListener("click", function () {
+        document.getElementById("searchInput").value = "";
+        document.getElementById("departmentFilter").value = "";
+        document.getElementById("siteFilter").value = "";
+        document.getElementById("projectStatusFilter").value = "";
+        document.getElementById("reviewStatusFilter").value = "";
+
+        filterAdminReports();
+    });
+
+
+
+// ======================================================
+// LOGOUT
+// ======================================================
+
+document.getElementById("adminLogout")
+    .addEventListener("click", function () {
+
+        sessionStorage.clear();
+
+        window.location.href =
+            "login.html";
+
+    });
+
+
+// ======================================================
+// HTML SAFETY
+// ======================================================
+
+function escapeHtml(value) {
+
+    if (!value)
+        return "";
+
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+
+// START
+
+loadAdminReports();
+
+</script>
+
+</body>
+</html>

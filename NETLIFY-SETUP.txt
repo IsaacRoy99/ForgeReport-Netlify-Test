@@ -1,0 +1,40 @@
+FORGE REPORT SYSTEM — NETLIFY PACKAGE
+====================================
+
+WHAT CHANGED
+- Kept the existing HTML/CSS pages and visual design.
+- Removed the old localhost/MonsterASP API addresses.
+- Added Netlify Functions at /api/* to replace the ASP.NET API routes.
+- Added authenticated login and account creation using Supabase Auth.
+- Added department selection to signup, report create/list/resubmit, admin review, and private attachment storage.
+- Added a database schema file: supabase-setup.sql.
+
+IMPORTANT: This folder is prepared for Netlify, but the API cannot operate until the Supabase project is configured. Do not upload any passwords or service-role keys to GitHub.
+
+ONE-TIME EXTERNAL SETUP
+1. Create a Supabase project at https://supabase.com/ (free tier is sufficient for a test).
+2. In Supabase, open SQL Editor, create a new query, paste the complete contents of supabase-setup.sql, and run it.
+3. In Supabase Project Settings -> API, copy the Project URL and the service_role key. The service_role key is SECRET; never put it in a source file or GitHub.
+4. Upload this folder to your GitHub repository, keeping netlify.toml, package.json, api-client.js, and netlify/ at the repository root.
+5. In Netlify, connect the repository. Build settings should use no build command and publish directory ".". Netlify should detect netlify.toml.
+6. In Netlify Site configuration -> Environment variables, add:
+   SUPABASE_URL = your Supabase Project URL
+   SUPABASE_SERVICE_ROLE_KEY = your Supabase service_role key
+   Save, then trigger a new deploy.
+7. Open the deployed site's signup page and create your own account. Choose the correct department.
+8. To make your account the administrator, open Supabase SQL Editor and run this command, replacing the email with your signup email:
+   update public.profiles set role = 'Admin' where lower(email) = lower('YOUR_EMAIL_HERE');
+9. Log in again. The administrator account should open admin.html. Create a separate Department Head account to test normal submissions.
+
+TEST CHECKLIST
+- Sign up and log in from a phone or desktop.
+- Submit a report and verify it appears in report history.
+- Log in as Admin, approve/reject it, and add rejection feedback.
+- Log back in as the submitting user and edit/resubmit the rejected report.
+- Test a small attachment. The current browser-to-function upload is limited to about 3.5 MB to stay within serverless request-size limits; the bucket itself is configured for 5 MB.
+
+DATA MIGRATION NOTE
+This creates a new Supabase database. It does not automatically copy historical users/reports from the old SQL Server database. Existing accounts will need to be recreated through signup unless their records are separately migrated. Do not delete the old database until the new site has been tested.
+
+SECURITY NOTE
+The Supabase service-role key belongs only in Netlify environment variables. Never add it to JavaScript, HTML, SQL, screenshots, or GitHub. If a database password or API secret was previously exposed, rotate it at its provider.
